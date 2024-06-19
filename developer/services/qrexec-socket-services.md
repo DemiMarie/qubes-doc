@@ -64,7 +64,7 @@ Put a symlink in `/etc/qubes-rpc`, e.g. `ln -s /var/run/my-daemon.sock /etc/qube
 If your program handles multiple services, create multiple symlinks.
 You can dispatch based on the service descriptor.
 
-Do not run the program as root.
+Do not run the program as root unless necessary.
 
 You can use systemd and socket activation so that the program is started only when the service is invoked.
 See the below example.
