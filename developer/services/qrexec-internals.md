@@ -32,8 +32,8 @@ These tools are not designed to be used by users directly.
 One instance is required for every active domain.
 `qrexec-daemon` is responsible for both:
 
-- handling execution and service requests from **dom0** (source: `qrexec-client`); and
-- handling service requests from the associated domain (source: `qrexec-client-vm`, then `qrexec-agent`).
+- handling execution and service requests from **dom0** (source: `qrexec-client` and other `qrexec-daemon` instances); and
+- handling service requests from the associated domain (source: `qrexec-client-vm` via `qrexec-agent`).
 
 Command line usage:
 
@@ -48,14 +48,24 @@ Command line usage:
 `/usr/bin/qrexec-client`
 
 Used to pass execution and service requests to `qrexec-daemon`.
+Starting with v4.2.19, `qrexec-daemon` does this itself, so `qrexec-client` is only used for requests made by dom0 and for unit tests.
 
 Command line usage:
 
 - `-d target-domain-name`: Specifies the target for the execution/service request.
 - `-l local-program`: Optional. If present, `local-program` is executed and its stdout/stdin are used when sending/receiving data to/from the remote peer.
-- `-e`: Optional. If present, stdout/stdin are not connected to the remote   peer. Only process creation status code is received.
-- `-c <request-id,src-domain-name,src-domain-id>`: used for connecting a VM-VM service request by `qrexec-policy`. Details described below in the service example.
+  If `local-program` starts with `QUBESRPC`, it is interpreted as a a service request and executed in dom0.
+- `-e`: Optional. If present, stdout/stdin are not connected to the remote peer. Only process creation status code is received.
+- `-c <request-id,src-domain-name,src-domain-id>`: used for connecting a VM-VM service request by `qrexec-policy` or `qrexec-daemon`.
+  Details described below in the service example.
+  Newer versions of `qrexec-daemon` and `qrexec-policy` no longer use this, but support remains in `qrexec-client`.
 - `cmdline`: Command line to pass to `qrexec-daemon` as the execution/service request. Service request format is described below in the service example.
+- `-k`: Optional. If present, the destination VM is killed (via Admin API call) after the call ends.  It should also be killed if an error occurs, but this
+  does not always happen due to a bug.
+
+In R4.1 and below, `qrexec-client` is invoked by the qrexec policy engine for every VM -> VM service call.
+In early R4.2 releases (`qubes-core-qrexec-dom0` below 4.2.19), it is invoked by `qrexec-daemon` for such calls.
+In later R4.2 releases (`qubes-core-qrexec-dom0` 4.2.19+), and in R4.3+, it is only used for calls made by dom0 and for unit tests.
 
 ## VM tools implementation
 
@@ -157,29 +167,45 @@ Details of all possible use cases and the messages involved are described below.
 
   `qrexec-agent` forwards the request (`MSG_TRIGGER_SERVICE3`) to its corresponding `qrexec-daemon` running in dom0.
 
-- **dom0**: `qrexec-daemon` receives the request and triggers `qrexec-policy` program, passing all necessary parameters: source domain **domX**, target domain **dom0**, service `admin.Service` and identifier `SOCKET11`.
+- **dom0**: `qrexec-daemon` receives the request.
+  It tries to connect to `qrexec-policy-daemon` if possible.
+  If that is not possible, it triggers `qrexec-policy-exec` program.
+  In both cases, it passes all necessary parameters: source domain **domX**, target domain **dom0**, service `admin.Service` and identifier `SOCKET11`.
 
-  `qrexec-policy` evaluates if the RPC should be allowed or denied, possibly also launching a GUI confirmation prompt.
+  `qrexec-policy-daemon` or `qrexec-policy-exec` evaluates if the RPC should be allowed or denied, possibly also launching a GUI confirmation prompt.
 
-  (If the RPC is denied, it returns with exit code 1, in which case `qrexec-daemon` sends a `MSG_SERVICE_REFUSED` back).
+  If the RPC is denied, `qrexec-daemon` sends a `MSG_SERVICE_REFUSED` back.
 
-- **dom0**: If the RPC is allowed, `qrexec-policy` will launch a `qrexec-client` with the right command:
+  The protocol used by `qrexec-policy-daemon` is documented in [qrexec-policy-daemon.rst](https://github.com/QubesOS/qubes-core-qrexec/blob/main/Documentation/qrexec-policy-daemon.rst).
 
-      qrexec-client -d dom0 -c domX,X,SOCKET11 "QUBESRPC admin.Service domX name dom0"
+- **dom0**: If the RPC is allowed, what happens depends on the Qubes OS version:
+
+  - In R4.1 and below, `qrexec-policy-exec` will launch a `qrexec-client` with the right command:
+
+        qrexec-client -d dom0 -c domX,X,SOCKET11 "QUBESRPC admin.Service+ domX name dom0"
+
+  - In R4.2 before qrexec 4.2.19, `qrexec-daemon` will instead launch the `qrexec-client`, with the same command.
+
+        qrexec-client -d dom0 -c domX,X,SOCKET11 "QUBESRPC admin.Service+ domX name dom0"
+
+  - Starting with qrexec 4.2.19, `qrexec-daemon` executes the command directly.
 
   The `-c domX,X,SOCKET11` are parameters indicating how connect back to **domX** and pass its input/output.
 
-  The command parameter describes the RPC call: it contains service name (`admin.Service`), source domain (`domX`) and target description (`name dom0`, could also be e.g. `keyword @dispvm`). The target description is important in case the original target wasn't dom0, but the service is executing in dom0.
+  The command parameter describes the RPC call: it contains service name and argument (`admin.Service+`), source domain (`domX`) and target description (`name dom0`, could also be e.g. `keyword @dispvm`).
+  The target description is important in case the original target wasn't dom0, but the service is executing in dom0.
+  The detailed syntax of the command can be found in [the qrexec command specification](/doc/qrexec-command-spec/)
 
-  `qrexec-client` connects to a `qrexec-daemon` for **domX** and sends a `MSG_SERVICE_CONNECT` with connection parameters (**dom0**, and port 0, indicating a port should be allocated) and request identifier (`SOCKET11`).
+  `qrexec-client` (R4.2 and below) or `qrexec-daemon` (R4.3 and up) connects to the `qrexec-daemon` for **domX** and sends a `MSG_SERVICE_CONNECT` with connection parameters (**dom0**, and port 0, indicating a port should be allocated) and request identifier (`SOCKET11`).
 
-  `qrexec-daemon` allocates a free port (513) and sends back connection parameters to `qrexec-client` (**domX** port 513).
+  `qrexec-daemon` allocates a free port (513) and sends back connection parameters to `qrexec-client` or `qrexec-daemon` (**domX** port 513).
 
-  `qrexec-client` starts the command, and tries to connect to **domX** over the provided port 513.
+  `qrexec-client` or `qrexec-client` starts the command, and tries to connect to **domX** over the provided port 513.
 
   Then, `qrexec-daemon` forwards the connection request (`MSG_SERVICE_CONNECT`) to `qrexec-agent` running in **domX**, with the right parameters (**dom0** port 513, request `SOCKET11`).
 
 - **dom0**: Because the command has the form `QUBESRPC: ...`, it is started through the `qubes-rpc-multiplexer` program with the provided parameters (`admin.Service domX name dom0`). That program finds and executes the necessary script in `/etc/qubes-rpc/`.
+  Starting in R4.3, `qubes-rpc-multiplexer` is skipped and `qrexec-daemon` executes the command itself.
 
 - **domX**: `qrexec-agent` receives the `MSG_SERVICE_CONNECT` and passes the connection parameters back to the connected `qrexec-client-vm`. It identifies the `qrexec-client-vm` by the request identifier (`SOCKET11` means file descriptor 11).
 
