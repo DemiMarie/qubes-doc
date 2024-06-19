@@ -14,8 +14,6 @@ ref: 37
 title: 'Qrexec: secure communication across domains'
 ---
 
-(*This page is about qrexec v3. For qrexec v2, see [here](/doc/qrexec2/).*)
-
 The **qrexec framework** is used by core Qubes components to implement communication between domains.
 Qubes domains are strictly isolated by design.
 However, the OS needs a mechanism to allow the administrative domain (dom0) to force command execution in another domain (VM).

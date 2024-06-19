@@ -12,8 +12,7 @@ title: 'Qrexec: Qubes RPC internals'
 ---
 
 (*This page details the current implementation of qrexec (qrexec3).
-A [general introduction](/doc/qrexec/) to qrexec is also available.
-For the implementation of qrexec2, see [here](/doc/qrexec2/#qubes-rpc-internals).*)
+A [general introduction](/doc/qrexec/) to qrexec is also available.*)
 
 The qrexec framework consists of a number of processes communicating with each other using a common IPC protocol, described in detail below.
 
