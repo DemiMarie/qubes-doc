@@ -32,8 +32,17 @@ When running in dom0, it is:
 
 (The target type can be `name`, in which case target is a domain name, or `keyword`, in which the target is a keyword like `@dispvm`).
 
+To disable passing this descriptor, add `skip-service-descriptor=true` to the service configuration file.
+
 Afterwards, data provided by the service's user (as stdin) is sent into the socket, and data received from the socket is sent back to the user (as stdout).
-When the service closes the socket, an exit code of 0 is sent back to the user.
+When the service closes the socket, or if EOF is received on both ends of the connection, an exit code of 0 is sent back to the user.
+Adding `exit-on-service-eof=true` to the configuration file causes qrexec to exit when the service closes its connection for writing,
+even if more data might be available from the service's user.
+Similarly, `exit-on-client-eof=true` in the configuration file causes qrexec to exit when the user closes the write end of the connection,
+even if the service might have more data to send.
+
+`skip-service-descriptor=true`, `exit-on-service-eof=true`, and `exit-on-client-eof=true` are only valid for socket-based services.
+If they are present for an executable service, the config option will be ignored and a warning will be logged.
 
 ### Differences from executable-based services
 
@@ -41,9 +50,11 @@ From the user point of view, the socket-based service behaves almost like an exe
 Here are the differences:
 
 * There is no stderr (the socket provides only one output stream).
-  Currently, that means stderr will also never be closed on user's end.
+  Before 4.2.20, stderr was not closed until the command exited.
+  Starting with 4.2.20, stderr is closed immediately.
 * There is no exit code.
   When the socket connection is closed, exit code 0 is sent to the user.
+  However, if the socket cannot be connected to, exit code 125 will be sent.
 
 ## Recommended use
 
