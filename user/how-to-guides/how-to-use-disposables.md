@@ -100,7 +100,7 @@ Note that the `qvm-open-in-dvm` process will not exit until you close the applic
 
 ## Making a particular application open everything in a disposable
 
-You can use the `qvm-service` command or the services GUI to cause an application in a qube to open files and URLs in a disposable.  To do this, enable a service named `app-dispvm.X` in that qube, where `X` is the application ID.  For instance, to have Thunderbird open all attachments in a disposable, enable the `app-dispvm.thunderbird` service.
+You can use the `qvm-service` command or the services GUI to cause an application in a qube to open files and URLs in a disposable.  To do this, enable a service named `app-dispvm.X` in that qube, where `X` is the application ID.  For instance, to have Thunderbird open all attachments in a disposable, enable the `app-dispvm.mozilla-thunderbird` service.
 
 This feature is currently somewhat experimental, and only works for Linux qubes.  It is known to work with Thunderbird and Wire, but it may fail to work with some applications that do not honor all XDG environment variables.  If the feature does not work for you, please file a bug report.
 
