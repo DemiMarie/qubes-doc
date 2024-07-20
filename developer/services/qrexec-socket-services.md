@@ -11,11 +11,17 @@ title: 'Qrexec: socket-based services'
 As of Qubes 4.1, qrexec allows implementing services not only as executable files, but also as Unix sockets.
 This allows Qubes RPC requests to be handled by a server running in a VM and listening for connections.
 
+Starting in R4.2 with qrexec 4.2.19 or later, it is also possible for a service to be implemented as a TCP socket.
+
 ## How it works
 
 When a Qubes RPC service is invoked,
 qrexec searches for a file that handles it in the qubes-rpc directories (`/etc/qubes-rpc` or `/usr/local/etc/qubes-rpc`).
 If the file is a Unix socket, qrexec will try to connect to it.
+If the file is a symbolic link to a path that starts with `/dev/tcp`, qrexec will parse the link to obtain an IP address and TCP port number:
+
+- If the path is exactly `/dev/tcp`, the IP address and port number will be taken from the service argument.
+  Everything after the last `+` in the service argument is considered to be the service argument.
 
 Before passing user input, the socket service will receive a null-terminated service descriptor, i.e. the part after `QUBESRPC`.
 When running in a VM, this is:
